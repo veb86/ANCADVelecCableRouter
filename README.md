@@ -18,6 +18,51 @@
 | `tests/VelecCableRouter.Core.Tests` | xUnit-тесты ядра. |
 | `examples/VelecCableRouter.Sample` | Консольный пример: прогоняет весь алгоритм на тестовом плане без AutoCAD и пишет отчёт, XDATA кабелей и SVG. |
 
+## Установка (AutoCAD 2020–2024)
+
+В каждом [выпуске](../../releases) есть архив `ANCADVelecCableRouter-manual-install-v<версия>.zip`. Он
+устанавливается **без инсталлятора и без прав администратора** — все файлы размещаются только в профиле
+пользователя (`%APPDATA%`):
+
+- AutoCAD 2020–2024 (а также 2025) — `%APPDATA%\Autodesk\ApplicationPlugins\ANCADVelecCableRouter.bundle`,
+  плагин загружается автоматически при запуске AutoCAD.
+
+Распакуйте архив и запустите `install.cmd` (или скопируйте папку `AppData` архива в `%USERPROFILE%`);
+удаление — `uninstall.cmd`. Подробная инструкция — [installer_manual/INSTALL.md](installer_manual/INSTALL.md)
+(она же лежит в архиве).
+
+Структура пакета:
+
+```text
+ANCADVelecCableRouter.bundle\
+  PackageContents.xml                        ← installer_acad/PackageContents.xml
+  Contents\AutoCAD2020-2024\                 ← net48: SeriesMin R23.1 (2020) … SeriesMax R24.3 (2024)
+    VelecCableRouter.AutoCAD.dll
+    VelecCableRouter.Core.dll
+  Contents\AutoCAD2025\                      ← net8.0-windows: R25.0 (2025)
+    VelecCableRouter.AutoCAD.dll, VelecCableRouter.Core.dll, VelecCableRouter.AutoCAD.deps.json
+```
+
+Также в выпуске есть архивы `ANCADVelecCableRouter-AutoCAD2020-2024-v<версия>.zip` и
+`ANCADVelecCableRouter-AutoCAD2025-v<версия>.zip` с DLL для ручной загрузки через `NETLOAD` и
+`release-manifest.txt` с SHA256.
+
+### Как выпустить новую версию
+
+1. Увеличьте `<Version>` в `Directory.Build.props` и `AppVersion` в `installer_acad/PackageContents.xml`
+   (CI проверяет, что они совпадают).
+2. Слейте изменения в `main`: workflow `Build and test` соберёт плагин, упакует и проверит архивы, проверит
+   `install.cmd`/`uninstall.cmd` и опубликует выпуск `v<версия>` (если его ещё нет). Выпуск также можно
+   создать тегом `v<версия>` или ручным запуском workflow.
+
+Локально (PowerShell 7, Windows или Linux):
+
+```powershell
+./scripts/package-release.ps1          # сборка и архивы в release/v<версия>/
+./scripts/test-release-package.ps1     # проверка состава архивов, PackageContents.xml и DLL
+./scripts/test-manual-install.ps1      # только Windows: install.cmd/uninstall.cmd во временном %APPDATA%
+```
+
 ## Сборка и тесты
 
 ```bash

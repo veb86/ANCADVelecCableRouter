@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Autoloader manifest of ANCADVelecCableRouter.bundle (issue #3).
+  AutoCAD loads the bundle automatically from %APPDATA%\Autodesk\ApplicationPlugins (per user, no administrator rights),
+  %ProgramFiles%\Autodesk\ApplicationPlugins or %ProgramData%\Autodesk\ApplicationPlugins.
+  AppVersion must equal <Version> in Directory.Build.props: scripts/test-release-package.ps1 checks it.
+  Series: R23.1 = AutoCAD 2020, R24.0 = 2021, R24.1 = 2022, R24.2 = 2023, R24.3 = 2024, R25.0 = 2025.
+-->
+<ApplicationPackage
+    SchemaVersion="1.0"
+    AutodeskProduct="AutoCAD"
+    ProductType="Application"
+    Name="ANCADVelecCableRouter"
+    AppVersion="0.2.0"
+    Description="Автоматическая трассировка кабелей по трассам (SuperLine) с XDATA BobrovXDATA v2"
+    Author="veb86"
+    ProductCode="{9a921531-c473-4922-a924-cde83f5f1942}"
+    UpgradeCode="{b237711d-e3a0-4aab-9445-4258b3d01a5a}"
+    HelpFile="https://github.com/veb86/ANCADVelecCableRouter">
+  <CompanyDetails Name="veb86" Url="https://github.com/veb86/ANCADVelecCableRouter" />
+  <Components>
+    <!-- AutoCAD 2020-2024: .NET Framework 4.8 build (AutoCAD.NET 23.1.0 API). -->
+    <ComponentEntry
+        AppName="VelecCableRouter2020"
+        AppType=".Net"
+        ModuleName="./Contents/AutoCAD2020-2024/VelecCableRouter.AutoCAD.dll"
+        AppDescription="VelecCableRouter для AutoCAD 2020-2024"
+        LoadOnAutoCADStartup="True"
+        LoadOnCommandInvocation="True">
+      <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R23.1" SeriesMax="R24.3" />
+      <Commands GroupName="VelecCableRouter">
+        <Command Global="VELEC_BUILD_CABLES" Local="VELEC_BUILD_CABLES" />
+        <Command Global="VELEC_CLEAR_DEBUG" Local="VELEC_CLEAR_DEBUG" />
+      </Commands>
+    </ComponentEntry>
+    <!-- AutoCAD 2025: .NET 8 build (AutoCAD.NET 25.0.1 API). -->
+    <ComponentEntry
+        AppName="VelecCableRouter2025"
+        AppType=".Net"
+        ModuleName="./Contents/AutoCAD2025/VelecCableRouter.AutoCAD.dll"
+        AppDescription="VelecCableRouter для AutoCAD 2025"
+        LoadOnAutoCADStartup="True"
+        LoadOnCommandInvocation="True">
+      <RuntimeRequirements OS="Win64" Platform="AutoCAD*" SeriesMin="R25.0" SeriesMax="R25.0" />
+      <Commands GroupName="VelecCableRouter">
+        <Command Global="VELEC_BUILD_CABLES" Local="VELEC_BUILD_CABLES" />
+        <Command Global="VELEC_CLEAR_DEBUG" Local="VELEC_CLEAR_DEBUG" />
+      </Commands>
+    </ComponentEntry>
+  </Components>
+</ApplicationPackage>

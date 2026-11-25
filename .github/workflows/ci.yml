@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   core-tests:
     runs-on: ubuntu-latest
@@ -31,13 +35,36 @@ jobs:
   windows-build:
     runs-on: windows-latest
     timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          . ./scripts/release-common.ps1
+          $version = Get-ProjectVersion -Root .
+          if ('${{ github.ref_type }}' -eq 'tag' -and '${{ github.ref_name }}' -ne "v$version") {
+            throw "Tag ${{ github.ref_name }} does not match <Version> v$version in Directory.Build.props."
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Version: $version"
       - name: Build the solution (AutoCAD 2020-2024 net48 and AutoCAD 2025 net8.0-windows)
         run: dotnet build VelecCableRouter.sln -c Release
+      - name: Package release archives (ANCADVelecCableRouter.bundle for manual installation into %APPDATA%)
+        shell: pwsh
+        run: ./scripts/package-release.ps1 -Version ${{ steps.version.outputs.version }}
+      - name: Verify release archives
+        shell: pwsh
+        run: ./scripts/test-release-package.ps1 -Version ${{ steps.version.outputs.version }}
+      - name: Test install.cmd and uninstall.cmd
+        shell: pwsh
+        timeout-minutes: 3
+        run: ./scripts/test-manual-install.ps1 -Version ${{ steps.version.outputs.version }}
       - name: Verify the AutoCAD 2024 API build
         run: dotnet build src/VelecCableRouter.AutoCAD -c Release -f net48 -p:AutoCadNet48ApiVersion=24.3.0 -p:OutputPath=../../artifacts/autocad2024
       - name: Verify that AutoCAD SDK assemblies are not deployed
@@ -55,3 +82,65 @@ jobs:
         with:
           name: plugin-binaries
           path: src/VelecCableRouter.AutoCAD/bin/Release
+      - name: Upload release archives
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-archives
+          path: |
+            release/v${{ steps.version.outputs.version }}/*.zip
+            release/v${{ steps.version.outputs.version }}/release-manifest.txt
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs: [core-tests, windows-build]
+    # Publishes from the default branch when <Version> in Directory.Build.props was bumped, from v* tags or on manual run.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && (github.ref_type == 'tag' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: v${{ needs.windows-build.outputs.version }}
+      VERSION: ${{ needs.windows-build.outputs.version }}
+    steps:
+      - name: Check whether the release already exists
+        id: check
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists; bump <Version> in Directory.Build.props and AppVersion in installer_acad/PackageContents.xml to publish a new one."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Download release archives
+        if: steps.check.outputs.publish == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: release-archives
+          path: dist
+      - name: Create release
+        if: steps.check.outputs.publish == 'true'
+        run: |
+          cat > notes.md <<EOF
+          ## ANCADVelecCableRouter $VERSION
+
+          | Файл | Назначение |
+          | --- | --- |
+          | \`ANCADVelecCableRouter-manual-install-v$VERSION.zip\` | **ручная установка без инсталлятора и без прав администратора** для AutoCAD 2020–2024 (и 2025): пакет \`%APPDATA%\\Autodesk\\ApplicationPlugins\\ANCADVelecCableRouter.bundle\`, плагин загружается автоматически; \`install.cmd\`, \`uninstall.cmd\` и инструкция \`INSTALL.md\` внутри |
+          | \`ANCADVelecCableRouter-AutoCAD2020-2024-v$VERSION.zip\` | DLL для \`NETLOAD\` в AutoCAD 2020–2024 (.NET Framework 4.8) |
+          | \`ANCADVelecCableRouter-AutoCAD2025-v$VERSION.zip\` | DLL для \`NETLOAD\` в AutoCAD 2025 (.NET 8) |
+
+          Команды: \`VELEC_BUILD_CABLES\`, \`VELEC_CLEAR_DEBUG\`. Контрольные суммы SHA256 — в \`release-manifest.txt\`.
+          EOF
+          gh release create "$TAG" dist/* \
+            --target "$GITHUB_SHA" \
+            --title "ANCADVelecCableRouter $VERSION" \
+            --notes-file notes.md
